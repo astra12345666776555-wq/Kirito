@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acceso seguro</title>
+<style>
+:root{--bg:#f4f5f9;--card:#fff;--text:#1b1d2a;--muted:#6a6f85;--line:#d9dcea;--accent:#5b4bff;--accent-t:#fff;--err:#c62839;--ok:#12805c;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#12131c;--card:#1c1e2b;--text:#eceefa;--muted:#9a9fb8;--line:#33364a;--accent:#8a7dff;--accent-t:#0f1020;--err:#ff7b88;--ok:#4ed3a3;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px 24px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+h1{font-size:1.4rem;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 20px;font-size:.92rem}
+.tabs{display:flex;background:var(--bg);border-radius:12px;padding:4px;margin-bottom:20px}
+.tabs button{flex:1;border:0;background:none;color:var(--muted);padding:10px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 6px}
+input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit}
+input:focus{outline:2px solid var(--accent);border-color:transparent}
+.pw{position:relative}.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--muted);cursor:pointer;padding:6px 8px;font:inherit;font-size:.8rem}
+.btn{width:100%;margin-top:20px;padding:13px;border:0;border-radius:10px;background:var(--accent);color:var(--accent-t);font:inherit;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.6;cursor:wait}.btn.ghost{background:none;border:1px solid var(--line);color:var(--text)}
+.msg{min-height:1.2em;margin-top:14px;font-size:.88rem}.msg.err{color:var(--err)}.msg.ok{color:var(--ok)}
+.hint{font-size:.78rem;color:var(--muted);margin-top:6px}
+.hidden{display:none}.welcome{text-align:center}.avatar{width:64px;height:64px;border-radius:50%;background:var(--accent);color:var(--accent-t);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;margin:0 auto 14px}
+</style>
+</head>
+<body>
+<main class="card">
+  <section id="auth">
+    <h1>Bienvenido</h1>
+    <p class="sub">Accede a tu cuenta o crea una nueva.</p>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabLogin" aria-selected="true">Iniciar sesión</button>
+      <button role="tab" id="tabReg" aria-selected="false">Registrarse</button>
+    </div>
+    <form id="formLogin" novalidate>
+      <label for="lEmail">Correo electrónico</label>
+      <input type="email" id="lEmail" autocomplete="email" required>
+      <label for="lPass">Contraseña</label>
+      <div class="pw"><input type="password" id="lPass" autocomplete="current-password" required><button type="button" data-toggle="lPass">Mostrar</button></div>
+      <button class="btn" type="submit" id="bLogin">Entrar</button>
+    </form>
+    <form id="formReg" class="hidden" novalidate>
+      <label for="rName">Nombre de usuario</label>
+      <input type="text" id="rName" autocomplete="username" maxlength="24" required>
+      <label for="rEmail">Correo electrónico</label>
+      <input type="email" id="rEmail" autocomplete="email" required>
+      <label for="rPass">Contraseña</label>
+      <div class="pw"><input type="password" id="rPass" autocomplete="new-password" required><button type="button" data-toggle="rPass">Mostrar</button></div>
+      <div class="hint">Mínimo 8 caracteres, con letras y números.</div>
+      <label for="rPass2">Repite la contraseña</label>
+      <input type="password" id="rPass2" autocomplete="new-password" required>
+      <button class="btn" type="submit" id="bReg">Crear cuenta</button>
+    </form>
+    <div class="msg" id="msg" role="alert"></div>
+  </section>
+  <section id="home" class="welcome hidden">
+    <div class="avatar" id="avatar"></div>
+    <h1 id="hello"></h1>
+    <p class="sub" id="who"></p>
+    <p class="sub">Has iniciado sesión correctamente.</p>
+    <button class="btn ghost" id="logout">Cerrar sesión</button>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+// ====== CONFIGURACIÓN: pega aquí los datos de tu proyecto Supabase ======
+const SB_URL = 'https://nbxngapaeqqcbuecjrsd.supabase.co';
+const SB_KEY = 'sb_publishable_cCEB-VE2tTUO1-bQAK7mhw__DoNT5Jd';
+// ========================================================================
+
+const $ = id => document.getElementById(id);
+const show = (t, c) => { $('msg').textContent = t || ''; $('msg').className = 'msg ' + (c || ''); };
+const configured = !SB_URL.startsWith('PEGA') && !SB_KEY.startsWith('PEGA');
+let sb = null;
+if (configured) sb = supabase.createClient(SB_URL, SB_KEY);
+else { show('Falta configurar Supabase (URL y clave) en este archivo.', 'err'); document.querySelectorAll('.btn').forEach(b => b.disabled = true); }
+
+function tab(login) {
+  $('formLogin').classList.toggle('hidden', !login); $('formReg').classList.toggle('hidden', login);
+  $('tabLogin').setAttribute('aria-selected', login); $('tabReg').setAttribute('aria-selected', !login); show('');
+}
+$('tabLogin').onclick = () => tab(true); $('tabReg').onclick = () => tab(false);
+document.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => {
+  const i = $(b.dataset.toggle), h = i.type === 'password'; i.type = h ? 'text' : 'password'; b.textContent = h ? 'Ocultar' : 'Mostrar';
+});
+
+function errText(e) {
+  const m = (e && e.message || '').toLowerCase();
+  if (m.includes('invalid login')) return 'Correo o contraseña incorrectos.';
+  if (m.includes('not confirmed')) return 'Confirma tu correo antes de entrar (revisa tu bandeja).';
+  if (m.includes('already registered')) return 'Ya existe una cuenta con ese correo.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Demasiados intentos. Espera un momento.';
+  if (m.includes('database error')) return 'Ese nombre de usuario ya está en uso.';
+  return 'No se pudo completar la acción. Inténtalo de nuevo.';
+}
+
+$('formReg').onsubmit = async e => {
+  e.preventDefault();
+  const name = $('rName').value.trim(), email = $('rEmail').value.trim().toLowerCase(), p = $('rPass').value, p2 = $('rPass2').value;
+  if (name.length < 3) return show('El nombre debe tener al menos 3 caracteres.', 'err');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return show('Introduce un correo válido.', 'err');
+  if (p.length < 8 || !/[A-Za-z]/.test(p) || !/\d/.test(p)) return show('La contraseña necesita 8+ caracteres, letras y números.', 'err');
+  if (p !== p2) return show('Las contraseñas no coinciden.', 'err');
+  $('bReg').disabled = true;
+  try {
+    const free = await sb.rpc('username_available', { name });
+    if (free.error) throw free.error;
+    if (!free.data) return show('Ese nombre de usuario ya está en uso.', 'err');
+    const { data, error } = await sb.auth.signUp({ email, password: p, options: { data: { username: name } } });
+    if (error) throw error;
+    if (data.user && data.user.identities && data.user.identities.length === 0) return show('Ya existe una cuenta con ese correo.', 'err');
+    $('formReg').reset();
+    if (!data.session) { tab(true); $('lEmail').value = email; show('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.', 'ok'); }
+  } catch (err) { show(errText(err), 'err'); }
+  finally { $('bReg').disabled = false; }
+};
+
+$('formLogin').onsubmit = async e => {
+  e.preventDefault();
+  const email = $('lEmail').value.trim().toLowerCase(), password = $('lPass').value;
+  if (!email || !password) return show('Completa correo y contraseña.', 'err');
+  $('bLogin').disabled = true;
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    $('formLogin').reset(); show('');
+  } catch (err) { show(errText(err), 'err'); }
+  finally { $('bLogin').disabled = false; }
+};
+
+$('logout').onclick = async () => { await sb.auth.signOut(); show('Sesión cerrada.', 'ok'); };
+
+async function render(session) {
+  if (!session) { $('home').classList.add('hidden'); $('auth').classList.remove('hidden'); return; }
+  let name = (session.user.user_metadata && session.user.user_metadata.username) || 'usuario';
+  const { data } = await sb.from('profiles').select('username').eq('id', session.user.id).maybeSingle();
+  if (data && data.username) name = data.username;
+  $('avatar').textContent = name.charAt(0).toUpperCase();
+  $('hello').textContent = 'Hola, ' + name; $('who').textContent = session.user.email;
+  $('auth').classList.add('hidden'); $('home').classList.remove('hidden');
+}
+if (sb) sb.auth.onAuthStateChange((_ev, session) => setTimeout(() => render(session), 0));
+</script>
+</body>
+</html>
